@@ -1,0 +1,17 @@
+Database Query Results:
+
+Current query is: "SELECT * FROM names ORDER BY Id LIMIT 5;"
+Time elapsed for the query is 0:00:05.001005:
+('1', 'Cody', 'test1')
+('2', 'Chris', 'test2')
+('3', 'Adam', 'test3')
+('4', 'Noah', 'new')
+('5', 'Aidan', 'words')
+
+Current query is: "SELECT * FROM table1 ORDER BY Id LIMIT 5;"
+Time elapsed for the query is 0:00:05.000425:
+('1', 'A', 'stuff')
+('2', 'B', 'other')
+('3', 'A', 'test')
+('4', 'B', 'can')
+('5', 'A', 'random')
