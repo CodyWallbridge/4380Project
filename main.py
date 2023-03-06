@@ -1,35 +1,39 @@
 import sqlite3
-import csv
 import datetime
 import os
 import time
 import pandas as pd
 
-queries = [
-    "SELECT * FROM names ORDER BY Id LIMIT 5;",
-    "SELECT * FROM table1 ORDER BY Id LIMIT 5;"
+files = [
+    "names.csv",
+    "table1.csv",
+    "table2.csv"
 ]
 
-def createDataFrames():
-    # create dataframes
-    global df
-    global df2
-    df = pd.read_csv("names.csv")
-    df2 = pd.read_csv("table1.csv")
+queries = [
+    "SELECT * FROM names ORDER BY Id",
+    "SELECT * FROM tableName ORDER BY Id"
+]
 
 
-def insertIntoTables():
-    df.to_sql('names', con=con, if_exists='replace')
-    df2.to_sql('table1', con=con, if_exists='replace')
+def populateTables():
+    dfNames = pd.read_csv("names.csv")
+    dfNames.to_sql('names', con=con, if_exists='replace')
 
+    dfTable = pd.read_csv("table1.csv")
+    dfTable.to_sql('tableName', con=con, if_exists='replace')
+    dfTable = pd.read_csv("table2.csv")
+    dfTable.to_sql('tableName', con=con, if_exists='append')
 
 def runQueries():
     for query in queries:
         start = datetime.datetime.now()
+        print("executing query: " + query)
         result = cursor.execute(query)
-        time.sleep(5)#can be removed. just added artificial timing to it.
+        time.sleep(1)#can be removed. just added artificial timing to it.
         end = datetime.datetime.now()
-        queryResult = result.fetchmany(5)
+        #queryResult = result.fetchmany(5)
+        queryResult = result.fetchall()
         time_elapsed = end - start
         file.write("Current query is: \"" + query + "\"\n")
         file.write("Time elapsed for the query is " + str(time_elapsed) + ":\n")
@@ -39,16 +43,17 @@ def runQueries():
 
 
 
+try:
+    if os.path.exists("amazonReviews4380.db"):
+        # remove the database file if it exists so we are definitely getting a clean start
+        os.remove("amazonReviews4380.db")
+    con = sqlite3.connect("amazonReviews4380.db")
+    cursor = con.cursor()
+    file = open("output.txt", "w")
+    file.write("Database Query Results:\n\n")
+    populateTables()
+    runQueries()
+    print("Done executing")
 
-con = sqlite3.connect("amazonReviews4380.db")
-cursor = con.cursor()
-file = open("output.txt", "w")
-file.write("Database Query Results:\n\n")
-createDataFrames()
-insertIntoTables()
-runQueries()
-con.close()
-if os.path.exists("amazonReviews4380.db"):
-    # remove the database file
-    os.remove("amazonReviews4380.db")
-print("Done executing")
+finally:
+    con.close()
