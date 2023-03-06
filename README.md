@@ -5,3 +5,6 @@ Results will be output to output.txt. If you want to reproduce the results, inst
 
 ## Things to know
 DB file gets automatically created and cleaned up with the program so it is a completely fresh run each time. Due to size of data, this can result in some delay during startup but the timings are only taken when executing queries.
+
+## Things to Install
+- ensure pandas is installed, if not follow this guide: https://www.geeksforgeeks.org/introduction-to-pandas-in-python/
