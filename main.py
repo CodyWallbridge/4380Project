@@ -5,11 +5,11 @@ import pandas as pd
 import locale
 
 queries = [
-    "SELECT * FROM brands;",
-    "SELECT * FROM categories;",
-    "SELECT * FROM customers;",
-    "SELECT * FROM products;",
-    "SELECT * FROM reviews;"
+    "SELECT * FROM brands LIMIT 5;",
+    "SELECT * FROM categories LIMIT 5;",
+    "SELECT * FROM customers LIMIT 5;",
+    "SELECT * FROM products LIMIT 5;",
+    "SELECT * FROM reviews LIMIT 5;"
 ]
 
 def remove_comma_or_period(x):
@@ -91,7 +91,8 @@ def populateTables():
     end = datetime.datetime.now()
     time_elapsed = end - start
     print("\n\n\nTime elapsed for the setup is " + str(time_elapsed))  
-     
+
+    #prints the tables, their columns and the row count (just to be safe for now)
     result = cursor.execute("SELECT name FROM sqlite_master WHERE type='table';")
     tables = result.fetchall()
     for table in tables:
@@ -99,10 +100,8 @@ def populateTables():
         result = cursor.execute(f"PRAGMA table_info('{table_name}');")
         columns = result.fetchall()
         column_names = [col[1] for col in columns]
-
         result = cursor.execute(f"SELECT COUNT(*) FROM {table_name};")
         row_count = result.fetchone()[0]
-
         print(f"Table: {table_name}, Columns: {' '.join(column_names)}, Rows: {row_count}")
 
 
@@ -117,14 +116,13 @@ def runQueries():
         file.write("Current query is: \"" + query + "\"\n")
         file.write("Time elapsed for the query is " + str(time_elapsed) + ":\n\n")
         # this line can be used for the later report where we print the 5 rows to output.txt
-        # for row in queryResult:
-        #     file.write(str(row) + "\n")
-        # file.write("\n")
+        for row in queryResult:
+            file.write(str(row) + "\n")
+        file.write("\n")
 
 
 dbExists = True
 if os.path.exists("amazonReviews4380.db") is False:
-    print("db dont exist")
     dbExists = False
 con = sqlite3.connect("amazonReviews4380.db")
 cursor = con.cursor()
