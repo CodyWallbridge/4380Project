@@ -3,21 +3,6 @@ import datetime
 import os
 import pandas as pd
 import locale
-import math
-
-def similarity(s1, s2):
-    if len(s1) < len(s2):
-        s1, s2 = s2, s1
-    if len(s1) == 0:
-        return 0.0
-    return (len(s1) - math.dist([s1.count(c) for c in set(s1)], [s2.count(c) for c in set(s2)]) / len(s1))
-
-def stddev(values):
-    if len(values) < 2:
-        return None
-    mean = sum(values) / len(values)
-    variance = sum((x - mean) ** 2 for x in values) / (len(values) - 1)
-    return math.sqrt(variance)
 
 verificationQueries = [
     "SELECT * FROM brands WHERE brand_name IS NULL OR brand_id IS NULL;",
@@ -72,7 +57,7 @@ codyQueries = [
     GROUP BY r.reviewerID
     ORDER BY avg_rating DESC
     LIMIT 1;""",
-    # Which brand has the highest percentage of products with a star rating above 4?
+    # (takes 1 hour with 1 review table) Which brand has the highest percentage of products with a star rating above 4?
     """SELECT b.brand_name, 
        COUNT(p.asin) * 100.0 / (SELECT COUNT(*) FROM products WHERE overall > 4) AS percentage_above_4_star
     FROM brands b 
@@ -90,7 +75,7 @@ codyQueries = [
     GROUP BY b.brand_name
     ORDER BY price_stdev DESC
     LIMIT 1;""",
-    # What is the average price of the top 5 most reviewed products in each category?
+    # (takes 2 days 16 hours and not complete, 1 review table) What is the average price of the top 5 most reviewed products in each category?
     """SELECT c.category, 
         AVG(p.price) as avg_price_top_5
     FROM categories c
@@ -113,7 +98,7 @@ codyQueries = [
     GROUP BY category_id, p.asin
     ) p ON c.category_id = p.category_id
     GROUP BY c.category;""",
-    # What is the average rating of products in each category, weighted by the number of reviews?
+    # (takes 1 day 16 hours and not complete, 1 review table) What is the average rating of products in each category, weighted by the number of reviews?
         """SELECT c.category, 
         SUM(r.overall * r.weight) / SUM(r.weight) as avg_weighted_rating
     FROM categories c
