@@ -14,50 +14,57 @@ verificationQueries = [
 ]
 
 codyQueries = [
-    # find all customers who have reviewed 10 different kinds of a category such as tools_and_home_improvement
+    # 1 Find all customers who have reviewed products across at least 15 amazon product areas
+    # (3:10)
+    # add index on reviews.asin (done in 3, 4, 9)
     """SELECT r.reviewerID, COUNT(DISTINCT p.category_id) AS num_categories_reviewed
-    FROM reviews r
-    INNER JOIN products p ON r.asin = p.asin
-    WHERE p.category_id = (SELECT category_id FROM categories WHERE category = 'tools_and_home_improvement')
-    GROUP BY r.reviewerID
-    HAVING COUNT(DISTINCT p.category_id) >= 10
-    LIMIT 5;""",
-    # find products which haven't been bought by a customer which was positively reviewed by other customers who share
-    # an 80% review similarity score with customer X, sorted on customer count
-    """SELECT p.asin, p.title, p.price, COUNT(DISTINCT r.reviewerID) as customer_count
-    FROM products p
-    LEFT JOIN reviews r ON p.asin = r.asin
-    LEFT JOIN (
-        SELECT r2.reviewerID
-        FROM reviews r1
-        JOIN reviews r2 ON r1.reviewerID <> r2.reviewerID AND r1.asin = r2.asin
-        WHERE r1.reviewerID = 'A1V6B6TNIC10QE'
-          AND r1.overall >= 4
-          AND r2.overall >= 4
-          AND (SELECT COUNT(*) FROM reviews WHERE reviewerID IN (r1.reviewerID, r2.reviewerID) AND asin = r1.asin) / 2.0 >= 0.8 * (SELECT COUNT(*) FROM reviews WHERE reviewerID = r1.reviewerID AND asin = r1.asin)
-        GROUP BY r2.reviewerID
-    ) similar_reviewers ON r.reviewerID = similar_reviewers.reviewerID
-    WHERE r.reviewerID IS NULL
-    GROUP BY p.asin, p.title, p.price
-    ORDER BY customer_count DESC
-    LIMIT 5;""",
-    # Which brand has the highest average star rating for its products?
+        FROM reviews r
+        INNER JOIN products p ON r.asin = p.asin
+        GROUP BY r.reviewerID
+        HAVING COUNT(DISTINCT p.category_id) >= 15
+        LIMIT 10;""",
+    # 2 Find people who have reviewed at least 20 items in the tools_and_home_improvement area
+    # (2:45)
+    # add index on reviews.reviewerID (alreadyt done in 3 and 5)
+    """SELECT r.reviewerID, COUNT(DISTINCT p.category_id) AS num_categories_reviewed
+        FROM reviews r
+        INNER JOIN products p ON r.asin = p.asin
+        WHERE p.category_id = (SELECT category_id FROM categories WHERE category = 'tools_and_home_improvement')
+        GROUP BY r.reviewerID
+        HAVING COUNT(DISTINCT p.asin) >= 20
+        LIMIT 10;""",
+    # 3 Find products which haven't been bought by a specific customer, which were positively reviewed by other
+    # customers who share an 80% review similarity score with that customer
+    # (11 minutes)
+    # add index on reviews.reviewerID and reviews.asin (both already done in query 5 and 4/9)
+    """  SELECT other_reviewers.asin FROM reviews other_reviewers 
+        WHERE other_reviewers.overall >= 3.0
+        AND other_reviewers.reviewerID in (
+        SELECT r2.reviewerID FROM reviews r1, reviews r2 
+        WHERE r1.reviewerID = 'A1V6B6TNIC10QE' 
+        AND r1.reviewerID <> r2.reviewerID 
+        AND r1.asin = r2.asin 
+            GROUP BY r2.reviewerID HAVING AVG(ABS(r1.overall - r2.overall)) <= 1.5)
+            AND other_reviewers.asin IN(
+                SELECT p.asin FROM products p 
+                LEFT JOIN reviews r on p.asin = r.asin 
+                WHERE r.reviewerID <> 'A1V6B6TNIC10QE' OR r.reviewerID is NULL)
+        LIMIT 10;""",
+    # 4 Get the 10 brands that have the highest average rating on their products
+    # (6 minutes)
+    # index on reviews.asin, sort reviews by price
+    # (asin is already done in query 9. maybe just sort with analyzing change in other queries is enough)
     """SELECT b.brand_name, AVG(r.overall) AS avg_rating
-    FROM brands b
-    INNER JOIN products p ON b.brand_id = p.brand_id
-    INNER JOIN reviews r ON p.asin = r.asin
-    GROUP BY b.brand_name
-    ORDER BY avg_rating DESC
-    LIMIT 1;""",
-    # Which customer has given the highest average star rating to products in a specific category?
-    """SELECT r.reviewerID, AVG(r.overall) AS avg_rating
-    FROM reviews r
-    INNER JOIN products p ON r.asin = p.asin
-    WHERE p.category_id = (SELECT category_id FROM categories WHERE category = 'electronics')
-    GROUP BY r.reviewerID
-    ORDER BY avg_rating DESC
-    LIMIT 1;""",
-    # (takes 1 hour with 1 review table) Which brand has the highest percentage of products with a star rating above 4?
+        FROM brands b
+        INNER JOIN products p ON b.brand_id = p.brand_id
+        INNER JOIN reviews r ON p.asin = r.asin
+        GROUP BY b.brand_name
+        ORDER BY avg_rating ASC
+        LIMIT 10;""",
+    # 5 Find the most negative reviewers in the electronics category with at least 10 reviews
+    # (3 mins)
+    # add index on reviews.reviewerId, sort reviews on average rating
+    # (analyze whether the sorting changes any other queries)
     """SELECT b.brand_name, 
        COUNT(p.asin) * 100.0 / (SELECT COUNT(*) FROM products WHERE overall > 4) AS percentage_above_4_star
     FROM brands b 
@@ -67,92 +74,74 @@ codyQueries = [
     GROUP BY b.brand_name
     ORDER BY percentage_above_4_star DESC
     LIMIT 1;""",
-    # Which brand has the highest standard deviation in product prices?
+    # 6 Find the top brand that has the highest proportion of reviews on their products as 5 stars
+    # (42 mins with 1 review table)
+    # add index on reviews.overall, can analyze difference between B+ and hash
+    """SELECT b.brand_name,
+        COUNT(p.asin) * 100.0 / (SELECT COUNT(*) FROM products WHERE overall > 4) AS percentage_above_4_star
+        FROM brands b
+        JOIN products p ON b.brand_id = p.brand_id
+        JOIN reviews r ON r.asin = p.asin
+        WHERE r.overall > 4
+        GROUP BY b.brand_name
+        ORDER BY percentage_above_4_star DESC
+        LIMIT 1;""",
+    # 7 Find the 10 brands who have the highest standard deviation in their pricing
+    # (26 seconds)
+    # index on products.brand_id
     """SELECT b.brand_name, ROUND(SQRT(AVG((p.price - avg_price) * (p.price - avg_price))), 2) AS price_stdev
-    FROM brands b
-    JOIN products p ON b.brand_id = p.brand_id
-    JOIN (SELECT brand_id, AVG(price) AS avg_price FROM products GROUP BY brand_id) AS avg_prices ON p.brand_id = avg_prices.brand_id
-    GROUP BY b.brand_name
-    ORDER BY price_stdev DESC
-    LIMIT 1;""",
-    # (takes 2 days 16 hours and not complete, 1 review table) What is the average price of the top 5 most reviewed products in each category?
-    """SELECT c.category, 
-        AVG(p.price) as avg_price_top_5
-    FROM categories c
-    JOIN products p ON c.category_id = p.category_id
-    WHERE p.asin IN (
-    SELECT asin 
-    FROM reviews 
-    WHERE asin IN (SELECT asin FROM products WHERE category_id = p.category_id) 
-    ORDER BY overall DESC 
-    LIMIT 5
-    )
-    GROUP BY c.category;""",
-    # For each category, what is the average number of reviews per product?
+        FROM brands b
+        JOIN products p ON b.brand_id = p.brand_id
+        JOIN (SELECT brand_id, AVG(price) AS avg_price FROM products GROUP BY brand_id) AS avg_prices ON p.brand_id = avg_prices.brand_id
+        GROUP BY b.brand_name
+        ORDER BY price_stdev DESC
+        LIMIT 10;""",
+    # 8 Find the average price of the 5 most reviewed items in each product category
+    # (4.5 days with 1 review did not complete)
+    """SELECT c.category, AVG(p.price) as avg_price_top_5
+        FROM categories c JOIN products p ON c.category_id = p.category_id
+        WHERE p.asin IN (
+            SELECT asin
+            FROM reviews
+            WHERE asin IN (SELECT asin FROM products WHERE category_id = p.category_id)
+            GROUP BY asin
+            ORDER BY count (*) DESC
+            LIMIT 5)
+        GROUP BY c.category;""",
+    # 9 Get the average number of reviews for products in each product category on Amazon
+    # (4 mins, index on reviews.asin and products.asin)
     """SELECT c.category, AVG(reviews_per_product) AS avg_reviews_per_product
-    FROM categories c
-    JOIN (
-    SELECT category_id, p.asin, COUNT(*) AS reviews_per_product
-    FROM products p
-    JOIN reviews r ON r.asin = p.asin
-    GROUP BY category_id, p.asin
-    ) p ON c.category_id = p.category_id
-    GROUP BY c.category;""",
-    # (takes 1 day 16 hours and not complete, 1 review table) What is the average rating of products in each category, weighted by the number of reviews?
-        """SELECT c.category, 
-        SUM(r.overall * r.weight) / SUM(r.weight) as avg_weighted_rating
-    FROM categories c
-    JOIN (
-    SELECT asin, overall, COUNT(*) as weight
-    FROM reviews
-    GROUP BY asin, overall
-    ) r ON asin IN (SELECT asin FROM products WHERE category_id = c.category_id)
-    GROUP BY c.category;""",
-    # Which brand has the highest percentage of products with a price in the bottom 10% of all products?
-    """SELECT b.brand_name, 
-        COUNT(p.asin) * 100.0 / (SELECT COUNT(*) FROM products) AS percentage_bottom_10_percent
-    FROM brands b 
-    JOIN products p ON b.brand_id = p.brand_id
-    WHERE p.price <= (
-            SELECT price
-            FROM (
-                SELECT price, ROW_NUMBER() OVER (ORDER BY price ASC) AS row_num, COUNT(*) OVER () AS total_rows
-                FROM products
-            ) subquery
-            WHERE row_num = ROUND(0.1 * total_rows)
-        )
-    GROUP BY b.brand_name
-    ORDER BY percentage_bottom_10_percent DESC
-    LIMIT 1;""",
-    # What is the average helpful votes count for reviews in each category?
-    """SELECT c.category, 
-        SUM(p.price * r.weight) / SUM(r.weight) as avg_weighted_price
-    FROM categories c
-    JOIN (
-    SELECT v.asin, price, COUNT(*) as weight
-    FROM reviews v
-    JOIN products p ON p.asin = v.asin
-    GROUP BY v.asin, price
-    ) r ON r.asin IN (SELECT asin FROM products WHERE category_id = c.category_id)
-    JOIN products p ON p.asin = r.asin
-    GROUP BY c.category;""",
-    # What is the average price of products in each category, weighted by the number of reviews?
-    """SELECT b.brand_name, c.category, 
-        AVG(reviews_per_product) AS avg_reviews_per_product
-    FROM brands b
-    JOIN products p ON b.brand_id = p.brand_id
-    JOIN categories c ON c.category_id = p.category_id
-    JOIN (
-    SELECT category_id, r.asin, COUNT(*) AS reviews_per_product
-    FROM reviews r
-    JOIN products p ON r.asin = p.asin
-    GROUP BY category_id, r.asin
-    ) x ON x.asin = p.asin AND x.category_id = c.category_id
-    GROUP BY b.brand_name, c.category;"""
-]
-
-chrisQueries = [
-
+        FROM categories c
+        JOIN (
+        SELECT category_id, p.asin, COUNT(*) AS reviews_per_product
+        FROM products p
+        JOIN reviews r ON r.asin = p.asin
+        GROUP BY category_id, p.asin
+        ) p ON c.category_id = p.category_id
+        GROUP BY c.category;""",
+    # 10 Get a weighted average of average product rating per each category (weighted on number of reviews in that category)
+    # (1.75 days on 1 reviews and did not complete)
+    """SELECT c.category, SUM(r.overall * r.weight) / SUM(r.weight) as avg_weighted_rating
+        FROM categories c
+        JOIN (
+            SELECT asin, overall, COUNT(*) as weight
+            FROM reviews
+            GROUP BY asin, overall
+        ) r ON asin IN (SELECT asin FROM products WHERE category_id = c.category_id)
+        GROUP BY c.category;""",
+    # 11 Get 10 brands with the highest proportion of items with price costing less than 90% of other products
+    # (15 seconds)
+    # sort products by price
+    """SELECT b.brand_name,
+        COUNT(p.asin) * 100.0 / (SELECT COUNT(*) FROM products) AS
+        percentage_bottom_10_percent
+        FROM brands b
+        JOIN products p ON b.brand_id = p.brand_id
+        WHERE p.price <= (SELECT price FROM products ORDER BY price LIMIT 1 OFFSET
+            (SELECT COUNT(*) FROM products) / 10)
+        GROUP BY b.brand_name
+        ORDER BY percentage_bottom_10_percent DESC
+        LIMIT 10;""",
 ]
 
 def remove_comma_or_period(x):
@@ -220,7 +209,7 @@ def populateTables():
         'vote': 'TEXT'
     }
     primary_key = ['asin', 'reviewerID']
-    for i in range(0,2):
+    for i in range(0,1):
         print("handling reviews" + str(i))
         dfReviews = pd.read_csv("complete_data_36gb/reviews" + str(i) + ".csv", dtype={'asin': 'string', 'reviewerID': 'string', 'unixReviewTime': 'int64', 'reviewText': 'string', 'summary': 'string', 'overall': 'int64', 'vote': 'string'})
         dfReviews['vote'] = dfReviews['vote'].apply(remove_comma_or_period)
@@ -237,18 +226,9 @@ def populateTables():
 
 
 def runCodyQueries():
-    #4 takes 1 hour
-    #6 took around 15 hours and still did not complete
-    #8 took at least 1 hour and still did not complete
-    #10 took at least 1 hour and still did not complete
     indexes = [8,10]
     print("Doing cody queries")
-    #i = 1
-    #for query in codyQueries:
-    #for i in range(11, len(codyQueries)):
     for i in indexes:
-        #have 0-11 queries
-    #for i in range(0, 5):
         query = codyQueries[i]
         start = datetime.datetime.now()
         print("executing query: " + str(i))
@@ -262,41 +242,9 @@ def runCodyQueries():
         for row in queryResult:
             file.write(str(row) + "\n")
         file.write("\n")
-    #    i += 1
-
-
-def runChrisQueries():
-    print("Doing chris queries")
-    i = 1
-    for query in chrisQueries:
-        start = datetime.datetime.now()
-        print("executing query: " + str(i))
-        result = cursor.execute(query)
-        queryResult = result.fetchall()
-        end = datetime.datetime.now()
-        time_elapsed = end - start
-        file.write("Current query is: \"" + query + "\"\n")
-        file.write("Time elapsed for the query is " + str(time_elapsed) + ":\n\n")
-        # this line can be used for the later report where we print the 5 rows to output.txt
-        for row in queryResult:
-            file.write(str(row) + "\n")
-        file.write("\n")
-        i += 1
 
 def showTables():
     #prints the tables, their columns and the row count (just to be safe for now)
-    # result = cursor.execute("SELECT name FROM sqlite_master WHERE type='table';")
-    # tables = result.fetchall()
-    # for table in tables:
-    #     table_name = table[0]
-    #     result = cursor.execute(f"PRAGMA table_info('{table_name}');")
-    #     columns = result.fetchall()
-    #     column_names = [col[1] for col in columns]
-    #     result = cursor.execute(f"SELECT COUNT(*) FROM {table_name};")
-    #     row_count = result.fetchone()[0]
-    #     print(f"Table: {table_name}, Columns: {' '.join(column_names)}, Rows: {row_count}")
-
-    #prints the tables and their columns
     result = cursor.execute("SELECT name FROM sqlite_master WHERE type='table';")
     tables = result.fetchall()
     for table in tables:
@@ -304,7 +252,19 @@ def showTables():
         result = cursor.execute(f"PRAGMA table_info('{table_name}');")
         columns = result.fetchall()
         column_names = [col[1] for col in columns]
-        print(f"Table: {table_name}, {' '.join(column_names)}")
+        result = cursor.execute(f"SELECT COUNT(*) FROM {table_name};")
+        row_count = result.fetchone()[0]
+        print(f"Table: {table_name}, Columns: {' '.join(column_names)}, Rows: {row_count}")
+
+    #prints the tables and their columns
+    # result = cursor.execute("SELECT name FROM sqlite_master WHERE type='table';")
+    # tables = result.fetchall()
+    # for table in tables:
+    #     table_name = table[0]
+    #     result = cursor.execute(f"PRAGMA table_info('{table_name}');")
+    #     columns = result.fetchall()
+    #     column_names = [col[1] for col in columns]
+    #     print(f"Table: {table_name}, {' '.join(column_names)}")
 
 def checkData():
     print("Doing verification queries")
@@ -349,22 +309,20 @@ def checkSelectStar():
         # file.write("\n")
         i += 1
 
-
 dbExists = True
 if os.path.exists("amazonReviews4380.db") is False:
     dbExists = False
 con = sqlite3.connect("amazonReviews4380.db")
-con.create_function("SIMILARITY", 2, similarity)
-con.create_aggregate("STDDEV", 1, stddev)
 cursor = con.cursor()
 if dbExists is False:
     populateTables()
 file = open("output.txt", "w")
 file.write("Database Query Results:\n\n")
 showTables()
+
 #checkData()
 #checkSelectStar()
-runCodyQueries()
-#runChrisQueries()
+
+#runCodyQueries()
 con.close()
 print("Done executing")
