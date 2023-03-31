@@ -62,11 +62,10 @@ codyQueries = [
         ORDER BY avg_rating ASC
         LIMIT 10;""",
     # 5 Find the most negative reviewers in the electronics category with at least 10 reviews
-    # (3 mins)
+    # (45 mins reviews_1)
     # add index on reviews.reviewerId, sort reviews on average rating
     # (analyze whether the sorting changes any other queries)
-    """SELECT b.brand_name, 
-       COUNT(p.asin) * 100.0 / (SELECT COUNT(*) FROM products WHERE overall > 4) AS percentage_above_4_star
+    """SELECT b.brand_name, COUNT(p.asin) * 100.0 / (SELECT COUNT(*) FROM products WHERE overall > 4) AS percentage_above_4_star
     FROM brands b 
     JOIN products p ON b.brand_id = p.brand_id
     JOIN reviews r ON r.asin = p.asin
@@ -75,7 +74,7 @@ codyQueries = [
     ORDER BY percentage_above_4_star DESC
     LIMIT 1;""",
     # 6 Find the top brand that has the highest proportion of reviews on their products as 5 stars
-    # (42 mins with 1 review table)
+    # (43 mins reviews_1)
     # add index on reviews.overall, can analyze difference between B+ and hash
     """SELECT b.brand_name,
         COUNT(p.asin) * 100.0 / (SELECT COUNT(*) FROM products WHERE overall > 4) AS percentage_above_4_star
@@ -210,6 +209,10 @@ def populateTables():
     }
     primary_key = ['asin', 'reviewerID']
     for i in range(0,1):
+
+    #for i in range(0,6):
+
+    #for i in range(0,32):
         print("handling reviews" + str(i))
         dfReviews = pd.read_csv("complete_data_36gb/reviews" + str(i) + ".csv", dtype={'asin': 'string', 'reviewerID': 'string', 'unixReviewTime': 'int64', 'reviewText': 'string', 'summary': 'string', 'overall': 'int64', 'vote': 'string'})
         dfReviews['vote'] = dfReviews['vote'].apply(remove_comma_or_period)
@@ -224,24 +227,73 @@ def populateTables():
     time_elapsed = end - start
     print("\n\n\nTime elapsed for the setup is " + str(time_elapsed))
 
+def testOptimizations():
+    start = datetime.datetime.now()
+    allTop5 = []
+    print("starting runs")
+    for i in range(0,29):
+        innerQuery = """SELECT asin
+                FROM reviews
+                WHERE asin IN (SELECT asin FROM products WHERE category_id = """ + str(i) + """)
+                GROUP BY asin
+                ORDER BY count (*) DESC
+                LIMIT 5;"""
+        cursor.execute(innerQuery)
+        result = cursor.fetchall()
+        allTop5.append(result)
+    for innerThing in allTop5:
+        #print(innerThing)
+        smallSet_str = "'" + "','".join(str(x[0]) for x in innerThing) + "'"
+        query = """SELECT c.category, AVG(p.price) as avg_price_top_5
+            FROM categories c JOIN products p ON c.category_id = p.category_id
+            WHERE p.asin IN ({})
+            GROUP BY c.category;""".format(smallSet_str)
+        cursor.execute(query)
+        queryResult = cursor.fetchall()
+        for row in queryResult:
+            print(str(row) + "\n")
+    
+    end = datetime.datetime.now()
+    time_elapsed = end - start
+    print("Query took " + str(time_elapsed) + " to execute")
 
-def runCodyQueries():
-    indexes = [8,10]
-    print("Doing cody queries")
+    
+
+
+def runQueries():
+    # (1 indexed)
+    # reviews1: 6, 8, 10
+    # reviews5: 5
+    
+    # for full tables
+    #indexes = [0,1,2,3,6,8,10]
+
+    # for 5 tables
+    #indexes = []
+
+    # for 1 table
+    #indexes = [4,5,7,9]
+    indexes = [4,5]
+    ogStart = datetime.datetime.now()
+    print("Doing queries")
     for i in indexes:
         query = codyQueries[i]
         start = datetime.datetime.now()
-        print("executing query: " + str(i))
         result = cursor.execute(query)
         queryResult = result.fetchall()
         end = datetime.datetime.now()
         time_elapsed = end - start
-        file.write("Current query is: \"" + query + "\"\n")
-        file.write("Time elapsed for the query is " + str(time_elapsed) + ":\n\n")
+        print("Current query index is " + str(i) + " is: \"" + query + "\"\n")
+        print("Time elapsed for the query is " + str(time_elapsed) + ":\n\n")
+        # file.write("Current query index is " + str(i) + "is: \"" + query + "\"\n")
+        # file.write("Time elapsed for the query is " + str(time_elapsed) + ":\n\n")
         # this line can be used for the later report where we print the 5 rows to output.txt
-        for row in queryResult:
-            file.write(str(row) + "\n")
-        file.write("\n")
+        # for row in queryResult:
+        #     file.write(str(row) + "\n")
+        # file.write("\n")
+    actuallyDone = datetime.datetime.now()
+    allTime = actuallyDone - ogStart
+    print("All queries together took " + str(allTime))
 
 def showTables():
     #prints the tables, their columns and the row count (just to be safe for now)
@@ -318,11 +370,12 @@ if dbExists is False:
     populateTables()
 file = open("output.txt", "w")
 file.write("Database Query Results:\n\n")
-showTables()
+#showTables()
 
 #checkData()
 #checkSelectStar()
 
-#runCodyQueries()
+#testOptimizations()
+runQueries()
 con.close()
 print("Done executing")
