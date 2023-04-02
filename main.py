@@ -257,22 +257,19 @@ def testOptimizations():
     time_elapsed = end - start
     print("Query took " + str(time_elapsed) + " to execute")
 
-    
+def addIndex():
+    cursor.execute("CREATE INDEX first ON reviews (reviewerID)")
 
 
-def runQueries():
-    # (1 indexed)
-    # reviews1: 6, 8, 10
-    # reviews5: 5
-    
+def runQueries():    
     # for full tables
     #indexes = [0,1,2,3,6,8,10]
 
     # for 5 tables
     #indexes = []
 
-    # for 1 table
-    #indexes = [4,5,7,9]
+    # for 1 table (top is only if were also running the days queries)
+    ##indexes = [4,5,7,9]
     indexes = [4,5]
     ogStart = datetime.datetime.now()
     print("Doing queries")
@@ -368,6 +365,7 @@ con = sqlite3.connect("amazonReviews4380.db")
 cursor = con.cursor()
 if dbExists is False:
     populateTables()
+addIndex()
 file = open("output.txt", "w")
 file.write("Database Query Results:\n\n")
 #showTables()
