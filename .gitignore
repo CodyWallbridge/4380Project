@@ -1,0 +1,5 @@
+*.db
+*.sql
+*.txt
+complete_data_36gb/*
+.idea/*
