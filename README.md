@@ -1,4 +1,11 @@
 # 4380Project
+# Download the data: 
+https://jmcauley.ucsd.edu/data/amazon/  
+Download the large metadata file, and the large review files per category. 
+
+# Data Preprocessing: 
+Run ./run_emm_all.bat, to fully preprocess the data and have it ready for use. 
+
 
 ## Operating Instructions:
 Results will be output to output.txt. If you want to reproduce the results, install python, and run "python .\main.py". Results will be generated and written to output.txt where they can be viewed.
